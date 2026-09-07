@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QA Test Case Generator</title>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+<main>
+  <header>
+    <h1>QA Test Case Generator</h1>
+    <p>Fill in the spec links and context, click Generate — Gemini produces the test case table, coverage summary, and open questions. Then download as CSV.</p>
+  </header>
+
+  <!-- Feature Context -->
+  <section class="panel">
+    <h2>1. Feature Context</h2>
+    <p class="desc">Tell the LLM what is being tested.</p>
+    <div class="row">
+      <div>
+        <label for="feature">Feature / Module under test *</label>
+        <input type="text" id="feature" placeholder="e.g., Hotel Reservation Booking Flow" />
+      </div>
+      <div>
+        <label for="platform">Platform</label>
+        <select id="platform">
+          <option value="web">Web</option>
+          <option value="mobile" selected>Mobile (iOS / Android)</option>
+          <option value="iOS">iOS only</option>
+          <option value="Android">Android only</option>
+          <option value="API">API</option>
+          <option value="web and mobile">Web + Mobile</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="roles">User roles in scope</label>
+        <input type="text" id="roles" placeholder="e.g., Admin, Member, Guest" />
+      </div>
+      <div>
+        <label for="model">Model</label>
+        <select id="model">
+          <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash (recommended, fast)</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro (highest quality, slower)</option>
+          <option value="gemini-2.0-flash">Gemini 2.0 Flash (fastest, cheaper)</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <!-- Source Material -->
+  <section class="panel">
+    <h2>2. Source Material</h2>
+    <p class="desc">Paste links to the spec, user flow, designs, and API contract. Leave blank if not applicable. <strong>Important:</strong> Gemini cannot open private links — for Notion / Confluence / Jira, paste the relevant content into the Extra Context box below.</p>
+    <div class="row">
+      <div><label for="specLink">Spec / PRD</label><input type="url" id="specLink" placeholder="https://..." /></div>
+      <div><label for="userFlowLink">User Flow</label><input type="url" id="userFlowLink" placeholder="https://..." /></div>
+    </div>
+    <div class="row">
+      <div><label for="figmaLink">Figma</label><input type="url" id="figmaLink" placeholder="https://..." /></div>
+      <div><label for="apiSpecLink">API Spec (Swagger / Postman / OpenAPI)</label><input type="url" id="apiSpecLink" placeholder="https://..." /></div>
+    </div>
+    <div class="row">
+      <div class="full"><label for="designDocLink">Design Doc / Tech Doc</label><input type="url" id="designDocLink" placeholder="https://..." /></div>
+    </div>
+    <div class="row">
+      <div class="full">
+        <label for="extraContext">Extra Context (paste spec excerpts, ACs, JSON schema, etc.)</label>
+        <textarea id="extraContext" class="large" placeholder="Paste any spec content, acceptance criteria, sample requests/responses, or anything the LLM needs to see to generate accurate test cases."></textarea>
+      </div>
+    </div>
+  </section>
+
+  <!-- Coverage tuning -->
+  <section class="panel">
+    <h2>3. Coverage Tuning</h2>
+    <p class="desc">Optional inputs for regression scope and must-include scenarios.</p>
+    <div class="row">
+      <div class="full">
+        <label for="adjacent">Adjacent features (regression risk)</label>
+        <input type="text" id="adjacent" placeholder='e.g., "Search filter", "Payment confirmation" — or leave blank to skip' />
+      </div>
+    </div>
+    <div class="row">
+      <div class="full">
+        <label for="mustInclude">Must-include scenarios</label>
+        <textarea id="mustInclude" class="large" placeholder='List edge cases or scenarios you want guaranteed coverage of. Examples:&#10;- User makes a reservation in a different timezone&#10;- User double-taps confirm button&#10;- App is backgrounded mid-payment'></textarea>
+      </div>
+    </div>
+  </section>
+
+  <!-- Generate -->
+  <section class="panel">
+    <h2>4. Generate</h2>
+    <p class="desc">Click Generate to produce the test cases. Or open the Manual Mode option below to copy the prompt into a different LLM.</p>
+    <div class="button-row">
+      <button class="btn large" id="generateBtn">Generate Test Cases</button>
+      <button class="btn ghost" id="showPromptBtn">Show Prompt Only</button>
+      <button class="btn ghost" id="stopBtn" disabled>Stop</button>
+      <button class="btn ghost" id="resetBtn">Reset Form</button>
+      <span id="streamStats" class="stats hidden"></span>
+    </div>
+
+    <div class="status" id="status"></div>
+  </section>
+
+  <!-- Output -->
+  <section class="panel" id="outputPanel" style="display:none;">
+
+    <!-- Manual mode subsection -->
+    <div id="manualMode" class="hidden">
+      <h2>Prompt — Copy Into Your LLM</h2>
+      <p class="desc">Copy the prompt below into ChatGPT / Claude / Gemini / etc., then paste the response into the box at the bottom of this section and click <strong>Render Response</strong>.</p>
+
+      <div class="button-row" style="margin-bottom: 12px;">
+        <button class="btn success" id="copyPromptBtn">Copy Prompt</button>
+        <button class="btn ghost" id="downloadPromptBtn">Download .txt</button>
+        <span id="promptStats" class="stats"></span>
+      </div>
+      <pre class="raw-stream" id="promptDisplay"></pre>
+
+      <h3 style="margin-top: 26px; font-size: 15px;">Paste LLM Response</h3>
+      <textarea id="llmResponse" class="large" placeholder="Paste the full LLM response (markdown) here..."></textarea>
+      <div class="button-row" style="margin-top: 10px;">
+        <button class="btn" id="renderResponseBtn">Render Response</button>
+        <button class="btn ghost" id="clearResponseBtn">Clear</button>
+      </div>
+    </div>
+
+    <!-- Rendered result -->
+    <div id="resultArea" class="hidden" style="margin-top: 24px;">
+      <h2>Generated Test Cases</h2>
+      <div class="button-row">
+        <button class="btn success" id="downloadCsvBtn">Download CSV</button>
+        <button class="btn ghost" id="copyMdBtn">Copy Markdown</button>
+        <button class="btn ghost" id="toggleRawBtn">Show Raw Markdown</button>
+        <span id="caseCount" class="stats"></span>
+      </div>
+      <div class="rendered-output" id="renderedOutput"></div>
+      <pre class="raw-stream hidden" id="rawOutput"></pre>
+    </div>
+
+  </section>
+
+  <p class="footer-note">Powered by Google Gemini. The API key is stored server-side and never sent to your browser.</p>
+</main>
+
+<div class="toast" id="toast">Done</div>
+
+<script src="prompt-template.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
