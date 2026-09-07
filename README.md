@@ -16,40 +16,54 @@ never sees it and end-users never need one.
 | `prompt-template.js` | The QA prompt sent to Gemini. **Edit this to tweak columns, coverage requirements, or rules.** |
 | `app.js` | Front-end logic: form → API call → markdown render → CSV export. Parses Gemini SSE. |
 | `api/generate.js` | **Vercel Edge Function.** Reads `GEMINI_API_KEY` from env, calls Gemini, streams the response back. |
+| `local-server.js` | Plain Node dev server that runs `api/generate.js` locally — no Vercel CLI or account needed. Used by `npm run dev`. |
 | `vercel.json` | Vercel config (sets 60s function timeout). |
-| `package.json` | Project metadata + `npm run deploy` script. Run `vercel dev` directly for local dev. |
+| `package.json` | Project metadata + `npm run dev` / `npm run deploy` scripts. |
 | `.env.example` | Template for env vars. Copy to `.env.local` for local dev. |
-| `.env.local` | Local env vars (gitignored). |
+| `.env.local` | Local env vars (gitignored — never commit this). |
 | `.gitignore` | Keeps secrets out of git. |
 
 ## Setup
 
-### 1. Get a Gemini API key
+### 1. Prerequisites
 
-Sign in at https://aistudio.google.com/apikey and click **Create API key**.
-It's free with generous quotas.
+- **Node.js 20.6+** (uses the built-in `--env-file` flag — check with `node --version`)
+- A free **Google Gemini API key**: sign in at https://aistudio.google.com/apikey
+  and click **Create API key**.
 
-### 2. Install the Vercel CLI (one-time)
-
-```bash
-npm install -g vercel
-```
-
-### 3. Add your key locally
-
-Open `.env.local` (already exists) and paste your key after `GEMINI_API_KEY=`.
-
-### 4. Run locally
+### 2. Clone and configure
 
 ```bash
-cd ~/Documents/workspace/qa_test_case_generator
-vercel dev
+git clone <this-repo-url>
+cd qa_test_case_generator
+cp .env.example .env.local
 ```
 
-Open the URL it prints (usually http://localhost:3000). Fill the form and
-click Generate — the local Edge Function uses your key from `.env.local`.
+Open `.env.local` and paste your key after `GEMINI_API_KEY=`. Leave
+`ALLOWED_ORIGINS` blank for local dev.
 
-### 5. Deploy to Vercel (free)
+### 3. Run locally
+
+```bash
+npm run dev
+```
+
+Open http://localhost:3000. Fill the form and click **Generate** — the local
+server reads your key from `.env.local` and proxies requests to Gemini, so
+the key never reaches the browser.
+
+No Vercel account or CLI is required for local development.
+
+### 4. (Optional) Deploy to Vercel so others can use a hosted link
+
+Skip this if you only need to run the app locally. Deploying gives you one
+shared URL so teammates don't need Node or their own Gemini key.
+
+```bash
+npm install -g vercel   # one-time
+vercel                  # first time: log in, link the project
+vercel --prod           # deploy to production
+```
 
 ```bash
 vercel          # first time: log in, link the project
@@ -147,3 +161,43 @@ shape. Model dropdown in `index.html` needs matching model IDs.
   internal Jira). Paste content into **Extra Context**.
 - Very long outputs may hit the `max_tokens` cap. Either raise the cap or
   generate cases in chunks (one scenario at a time).
+
+## Troubleshooting
+
+**`GEMINI_API_KEY is not configured on the server`**
+`.env.local` is missing, empty, or you ran `npm run dev` from the wrong
+folder. Confirm `GEMINI_API_KEY=...` is set in `.env.local` in the project
+root, then restart `npm run dev` (env vars are only read at server startup).
+
+**`Error: Cannot find flag '--env-file'` or similar Node error on `npm run dev`**
+Your Node version is too old. `local-server.js` needs Node 20.6+. Check with
+`node --version` and upgrade if needed.
+
+**Edits to `app.js`, `index.html`, or `prompt-template.js` don't show up**
+`local-server.js` serves static files fresh from disk on every request, so
+edits to those files just need a browser hard-refresh (Cmd/Ctrl+Shift+R) —
+no server restart needed. You only need to restart `npm run dev` after
+editing `api/generate.js` or `local-server.js` itself, since Node has those
+loaded in memory.
+
+**Generation finishes ("Done") but shows "0 test case row(s)" / CSV export says "No table to export yet"**
+This means the response text never turned into a real HTML `<table>`. Click
+**Show Raw Markdown** to see what Gemini actually returned. Common causes
+already handled by the app:
+- Gemini wrapping the whole answer in a ` ```markdown ` code fence
+- Gemini putting a table row's content across multiple physical lines (each
+  cell must be one line in GFM markdown)
+
+If you still hit this after those fixes, the raw markdown will show why —
+usually a malformed header/separator row from a custom prompt edit.
+
+**CORS error, or `Access-Control-Allow-Origin: null` in the Network tab**
+`ALLOWED_ORIGINS` in `.env.local` (or Vercel env vars) is set but doesn't
+include the origin you're loading the page from. Leave it blank for local
+dev, or set it to the exact URL you're using (e.g.
+`https://your-project.vercel.app`).
+
+**Deployed site works for you but not for others**
+Check `ALLOWED_ORIGINS` in Vercel's env vars matches your deployed URL
+exactly, and that `GEMINI_API_KEY` is set for both **Production** and
+**Preview** environments, then redeploy (`vercel --prod`).
